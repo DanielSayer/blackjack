@@ -9,7 +9,7 @@ import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader } from "./ui/card";
 
 export const AcceptingBetsScreen = () => {
-  const { dealCards, playerHands, handlePlaceBet, handleClear } =
+  const { dealCards, players, handlePlaceBet, handleClear } =
     useBlackjackStore();
   const [selected, setSelected] = useState<{
     id: number;
@@ -29,7 +29,7 @@ export const AcceptingBetsScreen = () => {
   return (
     <div className="flex flex-col items-center justify-center gap-6">
       <div className="flex gap-4">
-        {playerHands.map((player) => (
+        {players.map((player) => (
           <div className="flex gap-4 min-h-32 items-center" key={player.id}>
             <Button size="lg" className="invisible">
               Clear

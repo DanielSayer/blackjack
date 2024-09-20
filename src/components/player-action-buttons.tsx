@@ -7,21 +7,23 @@ type PlayerActionButtonsProps = {
 
 export const PlayerActionButtons = ({ player }: PlayerActionButtonsProps) => {
   const {
+    playerTurn,
     gameState,
     handlePlayerHit,
     handlePlayerStand,
     handlePlayAgain,
     handleDouble,
   } = useBlackjackStore();
-  const isPlayerMove = gameState === "player-move";
+  const isCurrentPlayer = playerTurn === player.id;
+  const isPlayerMove = gameState === "player-move" && isCurrentPlayer;
 
   const canDouble = () => {
-    return isPlayerMove && player.cards.length === 2;
+    return isCurrentPlayer && player.cards.length === 2;
   };
 
   const canSplit = () => {
     return (
-      isPlayerMove &&
+      isCurrentPlayer &&
       player.cards.length === 2 &&
       player.cards[0].value === player.cards[1].value
     );

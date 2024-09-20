@@ -29,7 +29,7 @@ export type Player = {
 };
 
 export type BlackjackStore = {
-  playerHands: Player[];
+  players: Player[];
   dealerHand: Card[];
   deck: Card[];
   playerBalance: number;
@@ -55,7 +55,7 @@ export type BlackjackStore = {
 };
 
 export const useBlackjackStore = create<BlackjackStore>((set, get) => ({
-  playerHands: [],
+  players: [],
   dealerHand: [],
   deck: [],
   gameState: "not-started",
@@ -66,7 +66,7 @@ export const useBlackjackStore = create<BlackjackStore>((set, get) => ({
   handleStartGame: () => {
     const deck = shuffleDeck(createDecks(8));
     set({
-      playerHands: [
+      players: [
         {
           id: 0,
           cards: [],
@@ -93,7 +93,7 @@ export const useBlackjackStore = create<BlackjackStore>((set, get) => ({
   },
 
   dealCards: async () => {
-    const playerBet = get().playerHands.map((hand) => hand.bet);
+    const playerBet = get().players.map((hand) => hand.bet);
     const betAmount = playerBet.reduce((acc, bet) => acc + bet.hand, 0);
 
     if (betAmount === 0) {
@@ -101,10 +101,10 @@ export const useBlackjackStore = create<BlackjackStore>((set, get) => ({
       return;
     }
 
-    get().playerHands.forEach(async (player) => {
+    get().players.forEach(async (player) => {
       const playerCardOne = await get().takeTopCard();
       set((state) => ({
-        playerHands: state.playerHands.map((x) =>
+        players: state.players.map((x) =>
           x.id === player.id ? { ...x, cards: [...x.cards, playerCardOne] } : x
         ),
       }));
@@ -115,16 +115,16 @@ export const useBlackjackStore = create<BlackjackStore>((set, get) => ({
       dealerHand: [...state.dealerHand, dealerCardOne],
     }));
 
-    get().playerHands.forEach(async (player) => {
+    get().players.forEach(async (player) => {
       const playerCardTwo = await get().takeTopCard();
       set((state) => ({
-        playerHands: state.playerHands.map((x) =>
+        players: state.players.map((x) =>
           x.id === player.id ? { ...x, cards: [...x.cards, playerCardTwo] } : x
         ),
       }));
     });
 
-    get().playerHands.forEach(async (hand) => {
+    get().players.forEach(async (hand) => {
       const bet = hand.bet;
       const sideBetWinnings = handleDealEnd(hand.cards, dealerCardOne, {
         pair: bet.pairs,
@@ -153,24 +153,26 @@ export const useBlackjackStore = create<BlackjackStore>((set, get) => ({
   },
 
   handlePlayerHit: async () => {
+    let newHand: Card[] = [];
     const playerIndex = get().playerTurn;
-    const newPlayerHands = get().playerHands.map(async (player) => {
+    const newPlayerHands = get().players.map(async (player) => {
       if (player.id === playerIndex) {
-        const newHand = [...player.cards, await get().takeTopCard()];
+        newHand = [...player.cards, await get().takeTopCard()];
 
-        if (isBust(newHand)) {
-          get().handlePlayerBust();
-        }
-
-        if (maxHandValue(newHand) === 21) {
-          get().handlePlayerStand();
-        }
         return { ...player, cards: newHand };
       }
       return player;
     });
     Promise.all(newPlayerHands).then((playerHands) => {
-      set({ playerHands, gameState: "player-move" });
+      set({ players: playerHands, gameState: "player-move" });
+
+      if (isBust(newHand)) {
+        get().handlePlayerBust();
+      }
+
+      if (maxHandValue(newHand) === 21) {
+        get().handlePlayerStand();
+      }
     });
   },
 
@@ -207,7 +209,7 @@ export const useBlackjackStore = create<BlackjackStore>((set, get) => ({
   // },
 
   handleClear: () => {
-    const hands = get().playerHands;
+    const hands = get().players;
     const betAmount = hands.reduce(
       (acc, hand) =>
         acc + hand.bet.hand + hand.bet.pairs + hand.bet.threeCardPoker,
@@ -221,14 +223,17 @@ export const useBlackjackStore = create<BlackjackStore>((set, get) => ({
     }));
 
     set((state) => ({
-      playerHands: newHands,
+      players: newHands,
       playerBalance: state.playerBalance + betAmount,
     }));
   },
 
   handlePlayerStand: async () => {
-    if (get().playerHands.length !== get().playerTurn) {
-      set((state) => ({ playerTurn: state.playerTurn + 1 }));
+    if (get().players.length - 1 !== get().playerTurn) {
+      set((state) => ({
+        playerTurn: state.playerTurn + 1,
+        gameState: "player-move",
+      }));
       return;
     }
     set((state) => ({
@@ -245,7 +250,7 @@ export const useBlackjackStore = create<BlackjackStore>((set, get) => ({
   },
 
   handleDouble: (playerIndex: number) => {
-    const playerHands = get().playerHands;
+    const playerHands = get().players;
     let betAmount = 0;
     const newHands = playerHands.map((player) => {
       if (player.id === playerIndex) {
@@ -264,11 +269,11 @@ export const useBlackjackStore = create<BlackjackStore>((set, get) => ({
     });
 
     set((state) => ({
-      playerHands: newHands,
+      players: newHands,
       playerBalance: state.playerBalance - betAmount,
     }));
 
-    const newPlayerHands = get().playerHands.map(async (player) => {
+    const newPlayerHands = get().players.map(async (player) => {
       if (player.id === playerIndex) {
         const newHand = [...player.cards, await get().takeTopCard()];
 
@@ -281,7 +286,7 @@ export const useBlackjackStore = create<BlackjackStore>((set, get) => ({
       return player;
     });
     Promise.all(newPlayerHands).then((playerHands) => {
-      set({ playerHands, gameState: "player-move" });
+      set({ players: playerHands, gameState: "player-move" });
     });
     get().handlePlayerStand();
   },
@@ -289,7 +294,7 @@ export const useBlackjackStore = create<BlackjackStore>((set, get) => ({
   handlePlayAgain: () => {
     set((state) => ({
       gameState: "accepting-bets",
-      playerHands: state.playerHands.map((player) => ({
+      players: state.players.map((player) => ({
         ...player,
         cards: [],
         bet: { hand: 0, pairs: 0, threeCardPoker: 0 },
@@ -304,7 +309,7 @@ export const useBlackjackStore = create<BlackjackStore>((set, get) => ({
       toast.error("Insufficient funds");
       return;
     }
-    const newHands = get().playerHands.map((player) => {
+    const newHands = get().players.map((player) => {
       if (player.id === playerIndex) {
         return {
           ...player,
@@ -318,12 +323,19 @@ export const useBlackjackStore = create<BlackjackStore>((set, get) => ({
     });
 
     set((state) => ({
-      playerHands: newHands,
+      players: newHands,
       playerBalance: state.playerBalance - amount,
     }));
   },
 
   handlePlayerBust: () => {
+    if (get().playerTurn < get().players.length - 1) {
+      set((state) => ({
+        playerTurn: state.playerTurn + 1,
+        gameState: "player-move",
+      }));
+      return;
+    }
     set((state) => ({
       dealerHand: [
         ...state.dealerHand.map((card) => ({ ...card, isHidden: false })),
@@ -334,7 +346,7 @@ export const useBlackjackStore = create<BlackjackStore>((set, get) => ({
 
   handleGameOver: () => {
     const playerWinnings = getWinnings(
-      get().playerHands,
+      get().players,
       get().dealerHand,
       get().sideBetWinnings
     );

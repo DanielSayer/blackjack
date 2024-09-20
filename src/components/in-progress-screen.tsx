@@ -5,7 +5,7 @@ import { PlayingCard } from "./playing-card";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 
 export const InProgressScreen = () => {
-  const { playerHands, dealerHand } = useBlackjackStore();
+  const { players, dealerHand } = useBlackjackStore();
   return (
     <div className="flex flex-col items-center justify-center -mt-40">
       <Card className="scale-75">
@@ -23,7 +23,7 @@ export const InProgressScreen = () => {
           ))}
         </CardContent>
       </Card>
-      {playerHands.map((player) => (
+      {players.map((player) => (
         <PlayerView key={player.id} player={player} />
       ))}
     </div>

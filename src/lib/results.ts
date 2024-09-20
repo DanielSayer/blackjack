@@ -13,6 +13,7 @@ export const getWinnings = (
   playerHand.forEach((hand) => {
     const playerValue = maxHandValue(hand.cards);
     const dealerValue = maxHandValue(dealerHand);
+    console.log(hand, "value", playerValue, "dealer", dealerValue);
 
     if (isBust(hand.cards)) {
       resultToast({ message: "Player bust!", winnings });
