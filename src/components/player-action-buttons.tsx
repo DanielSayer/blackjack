@@ -1,9 +1,12 @@
-import { useBlackjackStore } from "@/stores/useBlackjackStore";
+import { useBlackjackStore, type Player } from "@/stores/useBlackjackStore";
 import { Button } from "./ui/button";
 
-export const PlayerActionButtons = () => {
+type PlayerActionButtonsProps = {
+  player: Player;
+};
+
+export const PlayerActionButtons = ({ player }: PlayerActionButtonsProps) => {
   const {
-    playerHand,
     gameState,
     handlePlayerHit,
     handlePlayerStand,
@@ -13,14 +16,14 @@ export const PlayerActionButtons = () => {
   const isPlayerMove = gameState === "player-move";
 
   const canDouble = () => {
-    return isPlayerMove && playerHand.length === 2;
+    return isPlayerMove && player.cards.length === 2;
   };
 
   const canSplit = () => {
     return (
       isPlayerMove &&
-      playerHand.length === 2 &&
-      playerHand[0].value === playerHand[1].value
+      player.cards.length === 2 &&
+      player.cards[0].value === player.cards[1].value
     );
   };
 
@@ -38,7 +41,10 @@ export const PlayerActionButtons = () => {
         Stand
       </Button>
       {canDouble() && (
-        <Button disabled={!isPlayerMove} onClick={handleDouble}>
+        <Button
+          disabled={!isPlayerMove}
+          onClick={() => handleDouble(player.id)}
+        >
           Double
         </Button>
       )}

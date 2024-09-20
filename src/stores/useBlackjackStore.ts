@@ -18,23 +18,24 @@ export type GameState =
   | "accepting-bets"
   | "dealing-cards"
   | "player-move"
-  | "dealer-move";
+  | "dealer-move"
+  | "settling-funds";
+
+export type Player = {
+  id: number;
+  cards: Card[];
+  bet: Bet;
+  previousBet: Bet;
+};
 
 export type BlackjackStore = {
-  playerHand: Card[];
+  playerHands: Player[];
   dealerHand: Card[];
   deck: Card[];
   playerBalance: number;
   sideBetWinnings: number;
-  gameState:
-    | "not-started"
-    | "accepting-bets"
-    | "dealing-cards"
-    | "player-move"
-    | "dealer-move"
-    | "settling-funds";
-  bet: Bet;
-  lastBet: Bet | null;
+  gameState: GameState;
+  playerTurn: number;
   handleStartGame: () => void;
   takeTopCard: () => Promise<Card>;
   dealCards: () => Promise<void>;
@@ -43,32 +44,40 @@ export type BlackjackStore = {
   handleClear: () => void;
   handlePlayAgain: () => void;
   handleGameOver: () => void;
-  handleDouble: () => void;
+  handleDouble: (playerIndex: number) => void;
   handlePlayerBust: () => void;
-  handleBetLast: (lastBet: Bet) => void;
+  // handleBetLast: (lastBet: Bet) => void;
   handlePlaceBet: (
     bet: BettingType,
-    amount: number
-  ) => { ok: boolean; error?: string };
+    amount: number,
+    playerIndex: number
+  ) => void;
 };
 
 export const useBlackjackStore = create<BlackjackStore>((set, get) => ({
-  playerHand: [],
+  playerHands: [],
   dealerHand: [],
   deck: [],
   gameState: "not-started",
   playerBalance: 0,
-  bet: {
-    hand: 0,
-    pairs: 0,
-    threeCardPoker: 0,
-  },
-  lastBet: null,
+  playerTurn: 0,
   sideBetWinnings: 0,
 
   handleStartGame: () => {
     const deck = shuffleDeck(createDecks(8));
-    set({ deck, gameState: "accepting-bets", playerBalance: 100 });
+    set({
+      playerHands: [
+        {
+          id: 0,
+          cards: [],
+          bet: { hand: 0, pairs: 0, threeCardPoker: 0 },
+          previousBet: { hand: 0, pairs: 0, threeCardPoker: 0 },
+        },
+      ],
+      deck,
+      gameState: "accepting-bets",
+      playerBalance: 500,
+    });
   },
 
   takeTopCard: async () => {
@@ -84,44 +93,55 @@ export const useBlackjackStore = create<BlackjackStore>((set, get) => ({
   },
 
   dealCards: async () => {
-    const playerBet = get().bet;
-    const betAmount =
-      playerBet.hand + playerBet.pairs + playerBet.threeCardPoker;
+    const playerBet = get().playerHands.map((hand) => hand.bet);
+    const betAmount = playerBet.reduce((acc, bet) => acc + bet.hand, 0);
 
     if (betAmount === 0) {
       toast.error("Must place a bet before dealing cards");
       return;
     }
 
-    const playerCardOne = await get().takeTopCard();
-    set((state) => ({
-      playerHand: [...state.playerHand, playerCardOne],
-    }));
+    get().playerHands.forEach(async (player) => {
+      const playerCardOne = await get().takeTopCard();
+      set((state) => ({
+        playerHands: state.playerHands.map((x) =>
+          x.id === player.id ? { ...x, cards: [...x.cards, playerCardOne] } : x
+        ),
+      }));
+    });
 
     const dealerCardOne = await get().takeTopCard();
     set((state) => ({
       dealerHand: [...state.dealerHand, dealerCardOne],
     }));
 
-    const playerCardTwo = await get().takeTopCard();
-    set((state) => ({
-      playerHand: [...state.playerHand, playerCardTwo],
-    }));
+    get().playerHands.forEach(async (player) => {
+      const playerCardTwo = await get().takeTopCard();
+      set((state) => ({
+        playerHands: state.playerHands.map((x) =>
+          x.id === player.id ? { ...x, cards: [...x.cards, playerCardTwo] } : x
+        ),
+      }));
+    });
 
-    const bet = get().bet;
-    const sideBetWinnings = handleDealEnd(get().playerHand, dealerCardOne, {
-      pair: bet.pairs,
-      threeCardPoker: bet.threeCardPoker,
+    get().playerHands.forEach(async (hand) => {
+      const bet = hand.bet;
+      const sideBetWinnings = handleDealEnd(hand.cards, dealerCardOne, {
+        pair: bet.pairs,
+        threeCardPoker: bet.threeCardPoker,
+      });
+      set((state) => ({
+        sideBetWinnings: state.sideBetWinnings + sideBetWinnings,
+      }));
     });
 
     const dealerCardTwo = await get().takeTopCard();
     set((state) => ({
       dealerHand: [...state.dealerHand, { ...dealerCardTwo, isHidden: true }],
       gameState: "player-move",
-      sideBetWinnings,
     }));
 
-    if (isBlackjack(get().dealerHand) || isBlackjack(get().playerHand)) {
+    if (isBlackjack(get().dealerHand)) {
       set((state) => ({
         dealerHand: [
           ...state.dealerHand.map((card) => ({ ...card, isHidden: false })),
@@ -133,46 +153,84 @@ export const useBlackjackStore = create<BlackjackStore>((set, get) => ({
   },
 
   handlePlayerHit: async () => {
-    const newHand = [...get().playerHand, await get().takeTopCard()];
-    set({ playerHand: newHand });
-    if (isBust(newHand)) {
-      get().handlePlayerBust();
-      return;
-    }
-    if (maxHandValue(newHand) === 21) {
-      get().handlePlayerStand();
-    }
-    set({ gameState: "player-move" });
+    const playerIndex = get().playerTurn;
+    const newPlayerHands = get().playerHands.map(async (player) => {
+      if (player.id === playerIndex) {
+        const newHand = [...player.cards, await get().takeTopCard()];
+
+        if (isBust(newHand)) {
+          get().handlePlayerBust();
+        }
+
+        if (maxHandValue(newHand) === 21) {
+          get().handlePlayerStand();
+        }
+        return { ...player, cards: newHand };
+      }
+      return player;
+    });
+    Promise.all(newPlayerHands).then((playerHands) => {
+      set({ playerHands, gameState: "player-move" });
+    });
   },
 
-  handleBetLast: (lastBet: Bet) => {
-    const bet = get().bet;
-    const betAmount = bet.hand + bet.pairs + bet.threeCardPoker;
-    const lastBetAmount = lastBet.hand + lastBet.pairs + lastBet.threeCardPoker;
+  // handleBetLast: () => {
+  //   const hands = get().playerHands;
+  //   const betAmount = hands.reduce(
+  //     (acc, hand) =>
+  //       acc + hand.bet.hand + hand.bet.pairs + hand.bet.threeCardPoker,
+  //     0
+  //   );
+  //   const lastBet = get().lastBet;
+  //   const lastBetAmount = lastBet.reduce(
+  //     (acc, lastBet) =>
+  //       acc + lastBet.bet.hand + lastBet.bet.pairs + lastBet.bet.threeCardPoker,
+  //     0
+  //   );
 
-    const amountRequired = lastBetAmount - betAmount;
+  //   const amountRequired = lastBetAmount - betAmount;
 
-    if (amountRequired > get().playerBalance) {
-      toast.error("Insufficient funds");
-      return;
-    }
-    set((state) => ({
-      bet: lastBet,
-      playerBalance: state.playerBalance - amountRequired,
-    }));
-  },
+  //   if (amountRequired > get().playerBalance) {
+  //     toast.error("Insufficient funds");
+  //     return;
+  //   }
+
+  //   const newHands = lastBet.map((bet, index) => ({
+  //     playerIndex: index,
+  //     cards: [],
+  //     bet: bet.bet,
+  //   }));
+  //   set((state) => ({
+  //     playerHands: newHands,
+  //     playerBalance: state.playerBalance - amountRequired,
+  //   }));
+  // },
 
   handleClear: () => {
-    const bet = get().bet;
-    const betAmount = bet.hand + bet.pairs + bet.threeCardPoker;
+    const hands = get().playerHands;
+    const betAmount = hands.reduce(
+      (acc, hand) =>
+        acc + hand.bet.hand + hand.bet.pairs + hand.bet.threeCardPoker,
+      0
+    );
+    const newHands = hands.map((player) => ({
+      id: player.id,
+      cards: [],
+      bet: { hand: 0, pairs: 0, threeCardPoker: 0 },
+      previousBet: player.previousBet,
+    }));
 
     set((state) => ({
-      bet: { hand: 0, pairs: 0, threeCardPoker: 0 },
+      playerHands: newHands,
       playerBalance: state.playerBalance + betAmount,
     }));
   },
 
   handlePlayerStand: async () => {
+    if (get().playerHands.length !== get().playerTurn) {
+      set((state) => ({ playerTurn: state.playerTurn + 1 }));
+      return;
+    }
     set((state) => ({
       dealerHand: [
         ...state.dealerHand.map((card) => ({ ...card, isHidden: false })),
@@ -186,53 +244,83 @@ export const useBlackjackStore = create<BlackjackStore>((set, get) => ({
     get().handleGameOver();
   },
 
-  handleDouble: async () => {
-    const bet = get().bet;
-    const betAmount = bet.hand + bet.pairs + bet.threeCardPoker;
+  handleDouble: (playerIndex: number) => {
+    const playerHands = get().playerHands;
+    let betAmount = 0;
+    const newHands = playerHands.map((player) => {
+      if (player.id === playerIndex) {
+        betAmount = player.bet.hand;
+        if (betAmount > get().playerBalance) {
+          toast.error("Insufficient funds");
+          return player;
+        }
 
-    if (betAmount > get().playerBalance) {
-      toast.error("Insufficient funds");
-      return;
-    }
+        return {
+          ...player,
+          bet: { ...player.bet, hand: betAmount * 2 },
+        };
+      }
+      return player;
+    });
 
     set((state) => ({
-      bet: { ...state.bet, hand: state.bet.hand + bet.hand },
+      playerHands: newHands,
       playerBalance: state.playerBalance - betAmount,
     }));
 
-    const newHand = [...get().playerHand, await get().takeTopCard()];
-    set({ playerHand: newHand });
-    if (isBust(newHand)) {
-      get().handlePlayerBust();
-      return;
-    }
+    const newPlayerHands = get().playerHands.map(async (player) => {
+      if (player.id === playerIndex) {
+        const newHand = [...player.cards, await get().takeTopCard()];
 
+        if (isBust(newHand)) {
+          get().handlePlayerBust();
+        }
+
+        return { ...player, cards: newHand };
+      }
+      return player;
+    });
+    Promise.all(newPlayerHands).then((playerHands) => {
+      set({ playerHands, gameState: "player-move" });
+    });
     get().handlePlayerStand();
   },
 
   handlePlayAgain: () => {
-    set({
+    set((state) => ({
       gameState: "accepting-bets",
-      playerHand: [],
+      playerHands: state.playerHands.map((player) => ({
+        ...player,
+        cards: [],
+        bet: { hand: 0, pairs: 0, threeCardPoker: 0 },
+        previousBet: player.bet,
+      })),
       dealerHand: [],
-      bet: { hand: 0, pairs: 0, threeCardPoker: 0 },
-    });
+    }));
   },
 
-  handlePlaceBet: (bet: BettingType, amount: number) => {
+  handlePlaceBet: (bet: BettingType, amount: number, playerIndex: number) => {
     if (get().playerBalance < amount) {
-      return { ok: false, error: "Insufficient funds" };
+      toast.error("Insufficient funds");
+      return;
     }
+    const newHands = get().playerHands.map((player) => {
+      if (player.id === playerIndex) {
+        return {
+          ...player,
+          bet: {
+            ...player.bet,
+            [bet]: player.bet[bet] + amount,
+          },
+        };
+      }
+      return player;
+    });
 
     set((state) => ({
-      bet: {
-        ...state.bet,
-        [bet]: state.bet[bet] + amount,
-      },
+      playerHands: newHands,
       playerBalance: state.playerBalance - amount,
     }));
-
-    return { ok: true };
   },
 
   handlePlayerBust: () => {
@@ -246,15 +334,13 @@ export const useBlackjackStore = create<BlackjackStore>((set, get) => ({
 
   handleGameOver: () => {
     const playerWinnings = getWinnings(
-      get().playerHand,
+      get().playerHands,
       get().dealerHand,
-      get().bet.hand,
       get().sideBetWinnings
     );
     set((state) => ({
       gameState: "settling-funds",
       playerBalance: state.playerBalance + playerWinnings,
-      lastBet: state.bet,
     }));
   },
 }));

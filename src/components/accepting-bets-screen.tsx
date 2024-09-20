@@ -7,93 +7,89 @@ import {
 import { useState } from "react";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader } from "./ui/card";
-import { toast } from "sonner";
 
 export const AcceptingBetsScreen = () => {
-  const {
-    dealCards,
-    bet,
-    handlePlaceBet,
-    lastBet,
-    handleBetLast,
-    handleClear,
-  } = useBlackjackStore();
-  const [selected, setSelected] = useState<BettingType | undefined>("hand");
+  const { dealCards, playerHands, handlePlaceBet, handleClear } =
+    useBlackjackStore();
+  const [selected, setSelected] = useState<{
+    id: number;
+    bucket: BettingType | undefined;
+  }>({ id: 0, bucket: "hand" });
 
-  const handleClickOnBucket = (bet: BettingType) => {
-    const bettingType = selected === bet ? undefined : bet;
-    setSelected(bettingType);
+  const handleClickOnBucket = (id: number, bet: BettingType) => {
+    const bettingType = selected.bucket === bet ? undefined : bet;
+    setSelected({ id, bucket: bettingType });
   };
 
   const handleBet = (chip: Chips) => {
-    if (!selected) return;
-    const result = handlePlaceBet(selected, chip.value);
-    if (!result.ok) {
-      toast.error(result.error);
-    }
+    if (!selected.bucket) return;
+    handlePlaceBet(selected.bucket, chip.value, selected.id);
   };
 
   return (
     <div className="flex flex-col items-center justify-center gap-6">
-      <div className="flex gap-4 min-h-32 items-center">
-        <Button size="lg" className="invisible">
-          Clear
-        </Button>
-        <Card
-          className={cn("rounded-xl min-w-40 cursor-pointer", {
-            "border-2 border-primary border-dashed": selected === "pairs",
-          })}
-          onClick={() => handleClickOnBucket("pairs")}
-        >
-          <CardHeader className="text-center">Pairs</CardHeader>
-          <CardContent className="text-center">
-            <p className="text-xl font-bold">${bet.pairs}</p>
-          </CardContent>
-          {lastBet && (
-            <CardDescription className="text-center">
-              Last bet: ${lastBet.pairs}
-            </CardDescription>
-          )}
-        </Card>
+      <div className="flex gap-4">
+        {playerHands.map((player) => (
+          <div className="flex gap-4 min-h-32 items-center" key={player.id}>
+            <Button size="lg" className="invisible">
+              Clear
+            </Button>
+            <Card
+              className={cn("rounded-xl min-w-40 cursor-pointer", {
+                "border-2 border-primary border-dashed":
+                  selected.id === player.id && selected.bucket === "pairs",
+              })}
+              onClick={() => handleClickOnBucket(player.id, "pairs")}
+            >
+              <CardHeader className="text-center">Pairs</CardHeader>
+              <CardContent className="text-center">
+                <p className="text-xl font-bold">${player.bet.pairs}</p>
+              </CardContent>
+              <CardDescription className="text-center">
+                Last bet: ${player.previousBet.pairs}
+              </CardDescription>
+            </Card>
 
-        <Card
-          className={cn("rounded-xl min-w-40 cursor-pointer", {
-            "border-2 border-primary border-dashed": selected === "hand",
-          })}
-          onClick={() => handleClickOnBucket("hand")}
-        >
-          <CardHeader className="text-center">Hand</CardHeader>
-          <CardContent className="text-center">
-            <p className="text-xl font-bold">${bet.hand}</p>
-          </CardContent>
-          {lastBet && (
-            <CardDescription className="text-center">
-              Last bet: ${lastBet.hand}
-            </CardDescription>
-          )}
-        </Card>
+            <Card
+              className={cn("rounded-xl min-w-40 cursor-pointer", {
+                "border-2 border-primary border-dashed":
+                  selected.id === player.id && selected.bucket === "hand",
+              })}
+              onClick={() => handleClickOnBucket(player.id, "hand")}
+            >
+              <CardHeader className="text-center">Hand</CardHeader>
+              <CardContent className="text-center">
+                <p className="text-xl font-bold">${player.bet.hand}</p>
+              </CardContent>
+              <CardDescription className="text-center">
+                Last bet: ${player.previousBet.hand}
+              </CardDescription>
+            </Card>
 
-        <Card
-          className={cn("rounded-xl min-w-40 cursor-pointer", {
-            "border-2 border-primary border-dashed":
-              selected === "threeCardPoker",
-          })}
-          onClick={() => handleClickOnBucket("threeCardPoker")}
-        >
-          <CardHeader className="text-center">21 + 3</CardHeader>
-          <CardContent className="text-center">
-            <p className="text-xl font-bold">${bet.threeCardPoker}</p>
-          </CardContent>
-          {lastBet && (
-            <CardDescription className="text-center">
-              Last bet: ${lastBet.threeCardPoker}
-            </CardDescription>
-          )}
-        </Card>
+            <Card
+              className={cn("rounded-xl min-w-40 cursor-pointer", {
+                "border-2 border-primary border-dashed":
+                  selected.id === player.id &&
+                  selected.bucket === "threeCardPoker",
+              })}
+              onClick={() => handleClickOnBucket(player.id, "threeCardPoker")}
+            >
+              <CardHeader className="text-center">21 + 3</CardHeader>
+              <CardContent className="text-center">
+                <p className="text-xl font-bold">
+                  ${player.bet.threeCardPoker}
+                </p>
+              </CardContent>
+              <CardDescription className="text-center">
+                Last bet: ${player.previousBet.threeCardPoker}
+              </CardDescription>
+            </Card>
 
-        <Button size="lg" className="rounded-full" onClick={handleClear}>
-          Clear
-        </Button>
+            <Button size="lg" className="rounded-full" onClick={handleClear}>
+              Clear
+            </Button>
+          </div>
+        ))}
       </div>
       <div className="flex gap-4">
         {chips.map((chip) => (
@@ -106,15 +102,9 @@ export const AcceptingBetsScreen = () => {
             {chip.display}
           </Button>
         ))}
-        {lastBet && (
-          <Button
-            variant="outline"
-            className="rounded-full h-16"
-            onClick={() => handleBetLast(lastBet)}
-          >
-            BET LAST
-          </Button>
-        )}
+        <Button variant="outline" className="rounded-full h-16">
+          BET LAST
+        </Button>
       </div>
       <Button size="lg" onClick={dealCards}>
         Deal

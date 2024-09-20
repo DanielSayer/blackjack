@@ -1,39 +1,37 @@
 import { resultToast } from "@/components/result-toast";
 import type { Card } from "./cards";
 import { isBlackjack, isBust, maxHandValue } from "./hands";
+import type { Bet } from "@/stores/useBlackjackStore";
 
 export const getWinnings = (
-  playerHand: Card[],
+  playerHand: { cards: Card[]; bet: Bet }[],
   dealerHand: Card[],
-  bet: number,
   sideBetWinnings: number
 ) => {
   let winnings = sideBetWinnings;
-  const playerValue = maxHandValue(playerHand);
-  const dealerValue = maxHandValue(dealerHand);
 
-  if (isBust(playerHand)) {
-    resultToast({ message: "Player bust!", winnings });
-    return winnings;
-  }
+  playerHand.forEach((hand) => {
+    const playerValue = maxHandValue(hand.cards);
+    const dealerValue = maxHandValue(dealerHand);
 
-  if (isBlackjack(dealerHand)) {
-    resultToast({ message: "Dealer blackjack!", winnings: winnings });
-    return winnings;
-  }
-
-  if (isBlackjack(playerHand)) {
-    winnings += 2.5 * bet;
-    resultToast({ message: "Player blackjack!", winnings: winnings });
-  } else if (playerValue > dealerValue || isBust(dealerHand)) {
-    winnings += 2 * bet;
-    resultToast({ message: "Player wins!", winnings: winnings });
-  } else if (playerValue === dealerValue) {
-    winnings += bet;
-    resultToast({ message: "Push!", winnings: winnings });
-  } else {
-    resultToast({ message: "Dealer wins!", winnings: winnings });
-  }
+    if (isBust(hand.cards)) {
+      resultToast({ message: "Player bust!", winnings });
+    } else if (isBlackjack(dealerHand)) {
+      resultToast({ message: "Dealer blackjack!", winnings: winnings });
+      return winnings;
+    } else if (isBlackjack(hand.cards)) {
+      winnings += 2.5 * hand.bet.hand;
+      resultToast({ message: "Player blackjack!", winnings: winnings });
+    } else if (playerValue > dealerValue || isBust(dealerHand)) {
+      winnings += 2 * hand.bet.hand;
+      resultToast({ message: "Player wins!", winnings: winnings });
+    } else if (playerValue === dealerValue) {
+      winnings += hand.bet.hand;
+      resultToast({ message: "Push!", winnings: winnings });
+    } else {
+      resultToast({ message: "Dealer wins!", winnings: winnings });
+    }
+  });
 
   return winnings;
 };
