@@ -1,27 +1,22 @@
-import { useEffect } from "react";
+import { ArrowRight } from "lucide-react";
 import { Game } from "./components/game";
 import { Button } from "./components/ui/button";
-import { useGameStore } from "./stores/useGameStore";
+import { useBlackjackStore } from "./stores/useBlackjackStore";
 
 function App() {
-  const { isGameStarted, startGame, isGameOver } = useGameStore();
-
-  useEffect(() => {
-    if (isGameOver) {
-      setTimeout(() => {
-        alert("Game Over");
-      }, 500);
-    }
-  }, [isGameOver]);
+  const { gameState, handleStartGame } = useBlackjackStore((set) => set);
 
   return (
-    <div>
-      <h1>Blackjack</h1>
-
-      {isGameStarted ? (
-        <Game />
+    <div className="flex flex-col items-center justify-center h-screen gap-6">
+      {gameState === "not-started" ? (
+        <>
+          <h1 className="text-6xl">Blackjack</h1>
+          <Button onClick={handleStartGame}>
+            Start Game <ArrowRight className="w-4 h-4 ms-2" />
+          </Button>
+        </>
       ) : (
-        <Button onClick={startGame}>Start Game</Button>
+        <Game />
       )}
     </div>
   );

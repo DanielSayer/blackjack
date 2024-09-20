@@ -56,4 +56,13 @@ export default {
     },
   },
   plugins: [require("tailwindcss-animate")],
+  safelist: [
+    "red",
+    "orange",
+    "yellow",
+    "green",
+    "blue",
+    "indigo",
+    "violet",
+  ].map((c) => `from-${c}-400 to-${c}-800 border-${c}-900`),
 };
