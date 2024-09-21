@@ -1,11 +1,17 @@
 import { toast } from "sonner";
 
 type ResultToastProps = {
-  message: string;
+  message?: string;
   winnings: number;
 };
 
-export const resultToast = (props: ResultToastProps) => {
+export const resultToast = (
+  props: ResultToastProps & { numberOfPlayers: number }
+) => {
+  if (props.numberOfPlayers !== 1) {
+    return;
+  }
+
   return toast.info(
     <div>
       <p className="font-bold text-xl">{props.message}</p>
@@ -21,6 +27,19 @@ export const successToast = (props: ResultToastProps) => {
       <p>
         ${props.winnings} will be added to your balance at the end of the game
       </p>
+    </div>
+  );
+};
+
+export const massToast = (props: ResultToastProps & { details: string[] }) => {
+  return toast.info(
+    <div>
+      <p className="font-bold text-xl">You win ${props.winnings}</p>
+      <ul>
+        {props.details.map((detail, index) => (
+          <li key={index}>{detail}</li>
+        ))}
+      </ul>
     </div>
   );
 };

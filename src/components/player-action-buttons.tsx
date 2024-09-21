@@ -13,6 +13,7 @@ export const PlayerActionButtons = ({ player }: PlayerActionButtonsProps) => {
     handlePlayerStand,
     handlePlayAgain,
     handleDouble,
+    handlePlayerSplit,
   } = useBlackjackStore();
   const isCurrentPlayer = playerTurn === player.id;
   const isPlayerMove = gameState === "player-move" && isCurrentPlayer;
@@ -38,22 +39,28 @@ export const PlayerActionButtons = ({ player }: PlayerActionButtonsProps) => {
   }
 
   return (
-    <div className="w-[500px] flex justify-between mt-10">
-      <Button disabled={!isPlayerMove} onClick={handlePlayerStand}>
-        Stand
-      </Button>
-      {canDouble() && (
-        <Button
-          disabled={!isPlayerMove}
-          onClick={() => handleDouble(player.id)}
-        >
-          Double
+    <div className="flex w-full justify-center">
+      <div className="w-[500px] flex justify-between mt-10 px-16">
+        <Button disabled={!isPlayerMove} onClick={handlePlayerStand}>
+          Stand
         </Button>
-      )}
-      {canSplit() && <Button disabled={!isPlayerMove}>Split</Button>}
-      <Button disabled={!isPlayerMove} onClick={handlePlayerHit}>
-        Hit
-      </Button>
+        {canDouble() && (
+          <Button
+            disabled={!isPlayerMove}
+            onClick={() => handleDouble(player.id)}
+          >
+            Double
+          </Button>
+        )}
+        {canSplit() && (
+          <Button disabled={!isPlayerMove} onClick={handlePlayerSplit}>
+            Split
+          </Button>
+        )}
+        <Button disabled={!isPlayerMove} onClick={handlePlayerHit}>
+          Hit
+        </Button>
+      </div>
     </div>
   );
 };
