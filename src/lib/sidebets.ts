@@ -22,8 +22,6 @@ export const handleDealEnd = (
   dealerCard: Card,
   bet: { pair: number; threeCardPoker: number }
 ) => {
-  console.log("here");
-  console.log(playerHand, dealerCard, bet);
   let threeCardPokerPayout = 0;
   let pairPayout = 0;
 

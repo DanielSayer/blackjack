@@ -9,7 +9,7 @@ import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader } from "./ui/card";
 
 export const AcceptingBetsScreen = () => {
-  const { dealCards, players, handlePlaceBet, handleClear } =
+  const { dealCards, players, handlePlaceBet, handleClear, handleBetLast } =
     useBlackjackStore();
   const [selected, setSelected] = useState<{
     id: number;
@@ -102,7 +102,11 @@ export const AcceptingBetsScreen = () => {
             {chip.display}
           </Button>
         ))}
-        <Button variant="outline" className="rounded-full h-16">
+        <Button
+          variant="outline"
+          className="rounded-full h-16"
+          onClick={handleBetLast}
+        >
           BET LAST
         </Button>
       </div>

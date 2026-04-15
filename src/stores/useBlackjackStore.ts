@@ -26,9 +26,23 @@ export type Player = {
   cards: Card[];
   bet: Bet;
   previousBet: Bet;
+  roundStartingBet: Bet;
+  isSplitHand?: boolean;
 };
 
-const defaultBet = { hand: 0, pairs: 0, threeCardPoker: 0 };
+const createDefaultBet = (): Bet => ({ hand: 0, pairs: 0, threeCardPoker: 0 });
+const cloneBet = (bet: Bet): Bet => ({ ...bet });
+const getBetTotal = (bet: Bet) => bet.hand + bet.pairs + bet.threeCardPoker;
+const getPlayersBetTotal = (players: Player[], betKey: "bet" | "previousBet") =>
+  players.reduce((total, player) => total + getBetTotal(player[betKey]), 0);
+
+const createPlayer = (id: number): Player => ({
+  id,
+  cards: [],
+  bet: createDefaultBet(),
+  previousBet: createDefaultBet(),
+  roundStartingBet: createDefaultBet(),
+});
 
 export type BlackjackStore = {
   players: Player[];
@@ -49,7 +63,7 @@ export type BlackjackStore = {
   handleDouble: (playerIndex: number) => void;
   handlePlayerBust: () => void;
   handlePlayerSplit: () => void;
-  // handleBetLast: (lastBet: Bet) => void;
+  handleBetLast: () => void;
   handlePlaceBet: (
     bet: BettingType,
     amount: number,
@@ -69,14 +83,7 @@ export const useBlackjackStore = create<BlackjackStore>((set, get) => ({
   handleStartGame: () => {
     const deck = shuffleDeck(createDecks(8));
     set({
-      players: [
-        {
-          id: 0,
-          cards: [],
-          bet: defaultBet,
-          previousBet: defaultBet,
-        },
-      ],
+      players: [createPlayer(0)],
       deck,
       gameState: "accepting-bets",
       playerBalance: 500,
@@ -103,6 +110,14 @@ export const useBlackjackStore = create<BlackjackStore>((set, get) => ({
       toast.error("Must place a bet before dealing cards");
       return;
     }
+
+    set((state) => ({
+      sideBetWinnings: 0,
+      players: state.players.map((player) => ({
+        ...player,
+        roundStartingBet: cloneBet(player.bet),
+      })),
+    }));
 
     // Deal first card to each player
     for (const player of get().players) {
@@ -186,54 +201,43 @@ export const useBlackjackStore = create<BlackjackStore>((set, get) => ({
     });
   },
 
-  // handleBetLast: () => {
-  //   const hands = get().playerHands;
-  //   const betAmount = hands.reduce(
-  //     (acc, hand) =>
-  //       acc + hand.bet.hand + hand.bet.pairs + hand.bet.threeCardPoker,
-  //     0
-  //   );
-  //   const lastBet = get().lastBet;
-  //   const lastBetAmount = lastBet.reduce(
-  //     (acc, lastBet) =>
-  //       acc + lastBet.bet.hand + lastBet.bet.pairs + lastBet.bet.threeCardPoker,
-  //     0
-  //   );
-
-  //   const amountRequired = lastBetAmount - betAmount;
-
-  //   if (amountRequired > get().playerBalance) {
-  //     toast.error("Insufficient funds");
-  //     return;
-  //   }
-
-  //   const newHands = lastBet.map((bet, index) => ({
-  //     playerIndex: index,
-  //     cards: [],
-  //     bet: bet.bet,
-  //   }));
-  //   set((state) => ({
-  //     playerHands: newHands,
-  //     playerBalance: state.playerBalance - amountRequired,
-  //   }));
-  // },
-
   handleClear: () => {
     const hands = get().players;
-    const betAmount = hands.reduce(
-      (acc, hand) =>
-        acc + hand.bet.hand + hand.bet.pairs + hand.bet.threeCardPoker,
-      0
-    );
+    const betAmount = getPlayersBetTotal(hands, "bet");
     const newHands = hands.map((player) => ({
       ...player,
-      bet: defaultBet,
+      bet: createDefaultBet(),
     }));
 
     set((state) => ({
       players: newHands,
       playerBalance: state.playerBalance + betAmount,
     }));
+  },
+
+  handleBetLast: () => {
+    const players = get().players;
+    const currentBetTotal = getPlayersBetTotal(players, "bet");
+    const previousBetTotal = getPlayersBetTotal(players, "previousBet");
+
+    if (previousBetTotal === 0) {
+      toast.error("No previous bet to repeat");
+      return;
+    }
+
+    const availableBalance = get().playerBalance + currentBetTotal;
+    if (previousBetTotal > availableBalance) {
+      toast.error("Insufficient funds");
+      return;
+    }
+
+    set({
+      players: players.map((player) => ({
+        ...player,
+        bet: cloneBet(player.previousBet),
+      })),
+      playerBalance: availableBalance - previousBetTotal,
+    });
   },
 
   handlePlayerStand: async () => {
@@ -305,14 +309,19 @@ export const useBlackjackStore = create<BlackjackStore>((set, get) => ({
   handlePlayAgain: () => {
     set((state) => ({
       gameState: "accepting-bets",
-      players: state.players.map((player) => ({
-        ...player,
-        cards: [],
-        bet: defaultBet,
-        previousBet: player.bet,
-      })),
+      players: state.players
+        .filter((player) => !player.isSplitHand)
+        .map((player) => ({
+          ...player,
+          cards: [],
+          bet: createDefaultBet(),
+          previousBet: cloneBet(player.roundStartingBet),
+          roundStartingBet: createDefaultBet(),
+          isSplitHand: false,
+        })),
       dealerHand: [],
       playerTurn: 0,
+      sideBetWinnings: 0,
     }));
   },
 
@@ -365,14 +374,20 @@ export const useBlackjackStore = create<BlackjackStore>((set, get) => ({
     set((state) => ({
       gameState: "settling-funds",
       playerBalance: state.playerBalance + playerWinnings,
+      sideBetWinnings: 0,
     }));
   },
 
   handlePlayerSplit: () => {
     const playerTurn = get().playerTurn;
     const players = get().players;
-    let betAmount = 0;
-    const newHand: Card[] = [];
+    const player = players.find((player) => player.id === playerTurn);
+
+    if (!player) {
+      return;
+    }
+
+    const betAmount = player.bet.hand;
 
     if (get().playerBalance < betAmount) {
       toast.error("Insufficient funds");
@@ -381,8 +396,6 @@ export const useBlackjackStore = create<BlackjackStore>((set, get) => ({
 
     const newPlayers = players.map((player) => {
       if (player.id === playerTurn) {
-        betAmount = player.bet.hand;
-        newHand.push(player.cards[1]);
         return {
           ...player,
           cards: [player.cards[0]],
@@ -395,10 +408,12 @@ export const useBlackjackStore = create<BlackjackStore>((set, get) => ({
       players: [
         ...newPlayers,
         {
-          id: players.length,
-          cards: [...newHand],
+          id: Math.max(...players.map((player) => player.id)) + 1,
+          cards: [player.cards[1]],
           bet: { hand: betAmount, pairs: 0, threeCardPoker: 0 },
-          previousBet: defaultBet,
+          previousBet: createDefaultBet(),
+          roundStartingBet: cloneBet(player.roundStartingBet),
+          isSplitHand: true,
         },
       ],
       playerBalance: state.playerBalance - betAmount,
